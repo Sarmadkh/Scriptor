@@ -1,0 +1,13 @@
+{
+  "snippets": [
+    {
+      "cssCode": "",
+      "jsCode": "window.alert ('Scriptor Installed');",
+      "name": "Installed",
+      "sites": [
+        "google.com"
+      ],
+      "type": "Auto"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Scriptor",
+  "version": "1.0",
+  "description": "Inject Custom Code Snippets to a Website",
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "scripting",
+    "tabs",
+    "storage",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Scriptor"
+  },
+  "web_accessible_resources": [{
+    "resources": ["snippets.json", "index.html", "index.js", "styles.css"],
+    "matches": ["<all_urls>"]
+  }]
+}

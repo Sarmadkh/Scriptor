@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Scriptor Manager</title>
+    <style>
+
+        :root {
+            --bg-primary: #1a1b1e;
+            --bg-secondary: #2c2d31;
+            --text-primary: #e1e1e1;
+            --text-secondary: #a0a0a0;
+            --accent-color: #3b82f6;
+            --danger-color: #ef4444;
+            --success-color: #22c55e;
+            --border-color: #404040;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+        }
+
+        .header-middle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .snippet-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .snippet-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            height: 300px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .snippet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .snippet-title-container {
+            flex: 1;
+            overflow: hidden;
+            margin-right: 12px;
+        }
+
+        .snippet-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+
+        .snippet-title:hover {
+            animation: marquee 8s linear infinite;
+        }
+
+        @keyframes marquee {
+            0% {
+                transform: translateX(0);
+            }
+
+            100% {
+                transform: translateX(-100%);
+            }
+        }
+
+        .snippet-metadata {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .type-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            background-color: var(--accent-color);
+            color: white;
+            height: 20px;
+        }
+
+        .snippet-sites {
+            color: var(--text-secondary);
+            background-color: var(--bg-primary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex: 1;
+        }
+
+        .snippet-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            background-color: var(--accent-color);
+            color: white;
+            transition: opacity 0.2s;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+        }
+
+        .code-section {
+            flex: 1;
+            overflow-y: auto;
+            background-color: var(--bg-primary);
+            border-radius: 4px;
+            padding: 12px;
+            margin-top: 8px;
+        }
+
+        .code-label {
+            color: var(--text-secondary);
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        code {
+            display: block;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            color: var(--text-primary);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: var(--bg-secondary);
+            padding: 24px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        input[type="text"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <h1>Scriptor Manager</h1>
+            </div>
+            <div class="header-middle">
+                <button id="importBtn" class="btn">Import</button>
+                <button id="exportBtn" class="btn">Export</button>
+            </div>
+            <div class="header-right">
+                <button id="addSnippet" class="btn btn-success">Add Snippet</button>
+            </div>
+        </div>
+        <div id="snippetList" class="snippet-grid"></div>
+    </div>
+
+    <div id="snippetModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Add Snippet</h2>
+            <form id="snippetForm">
+                <div class="form-group">
+                    <label for="nameInput">Name</label>
+                    <input type="text" id="nameInput" required>
+                </div>
+                <div class="form-group">
+                    <label for="typeInput">Type</label>
+                    <select id="typeInput" required>
+                        <option value="Auto">Auto Injection</option>
+                        <option value="Context">Context Menu</option>
+                        <option value="Redirect">URL Redirect</option>
+                        
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="sitesInput">Sites (one per line)</label>
+                    <textarea id="sitesInput" required placeholder="Enter URLs separated by commas, or use * for all sites"></textarea>
+                </div>
+                <div id="codeContainer" class="code-container">
+                    <div class="form-group">
+                        <label for="jsCodeInput">JavaScript Code</label>
+                        <textarea id="jsCodeInput" class="code-input"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="cssCodeInput">CSS Code</label>
+                        <textarea id="cssCodeInput" class="code-input"></textarea>
+                    </div>
+                </div>
+                <div id="redirectContainer" class="redirect-container" style="display: none;">
+                    <div class="form-group">
+                        <label for="fromPatternInput">From Pattern</label>
+                        <input type="text" id="fromPatternInput" placeholder="Use * to Capture a Group">
+                    </div>
+                    <div class="form-group">
+                        <label for="toPatternInput">To Pattern</label>
+                        <input type="text" id="toPatternInput" placeholder="Use $1 $2 $3... to Replace a Group">
+                    </div>
+                    
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="cancelBtn" class="btn">Cancel</button>
+                    <button type="submit" class="btn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="index.js"></script>
+</body>
+
+</html>
