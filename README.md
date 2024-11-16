@@ -22,3 +22,7 @@ Wildcards are the simplest way to specify include and exclude patterns. When you
 $1, $2, $3 in the redirect urls will match the text that the stars matched. Examples:
 - __http://example.com/*__ matches http://example.com/foobar, $1 is foobar.
 - __http://*.example.com/*__ matches http://www.example.com/foobar, $1 is www, $2 is foobar.
+
+
+## Todo List
+1. Make a code run on all sites
