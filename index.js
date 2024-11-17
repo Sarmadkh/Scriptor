@@ -121,10 +121,11 @@ cancelBtn.addEventListener('click', () => {
 });
 
 snippetList.addEventListener('click', async (e) => {
-  const target = e.target;
+  const button = e.target.closest('button'); // Find the closest button element
+  if (!button) return;
 
-  if (target.matches('.edit-btn')) {
-    const index = parseInt(target.dataset.index);
+  if (button.classList.contains('edit-btn')) {
+    const index = parseInt(button.dataset.index);
     const snippets = await chrome.storage.local.get('snippets').then(data => data.snippets);
     const snippet = snippets[index];
 
@@ -149,8 +150,8 @@ snippetList.addEventListener('click', async (e) => {
     snippetModal.classList.add('active');
   }
 
-  if (target.matches('.delete-btn')) {
-    const index = parseInt(target.dataset.index);
+  if (button.classList.contains('delete-btn')) {
+    const index = parseInt(button.dataset.index);
     const snippets = await chrome.storage.local.get('snippets').then(data => data.snippets);
     const snippet = snippets[index];
     const snippetName = snippet.name;
@@ -160,7 +161,6 @@ snippetList.addEventListener('click', async (e) => {
       await saveSnippets(snippets);
     }
   }
-  
 });
 
 snippetForm.addEventListener('submit', async (e) => {
@@ -229,8 +229,8 @@ const renderSnippet = (snippet, index) => {
         <span class="snippet-title">${snippet.name}</span>
       </div>
       <div class="snippet-actions">
-        <button class="btn edit-btn" data-index="${index}">Edit</button>
-        <button class="btn btn-danger delete-btn" data-index="${index}">Delete</button>
+        <button class="icon-button edit-btn" title="Edit" data-index="${index}"><i class="fas fa-edit"></i></button>
+        <button class="icon-button delete-btn" title="Delete" data-index="${index}"><i class="fas fa-trash"></i></button>
       </div>
     </div>
     <div class="snippet-metadata">
