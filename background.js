@@ -30,13 +30,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true });
       }
     });
-    return true; 
+    return true;
   }
 });
 
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   const tab = details;
-  snippets.filter(snippet => snippet.type === 'Redirect').forEach(snippet => {
+  snippets.filter(snippet =>
+    snippet.type === 'Redirect' &&
+    snippet.enabled !== false &&
+    snippet.sites.some(url => tab.url.includes(url))
+  ).forEach(snippet => {
     if (snippet.sites.some(url => tab.url.includes(url))) {
       let newUrl = tab.url;
 
@@ -70,16 +74,17 @@ function updateContextMenus() {
 
 function updateContextMenu(tab) {
   chrome.contextMenus.removeAll(() => {
-    const relevantSnippets = snippets.filter(snippet => 
-      snippet.type === 'Context' && 
+    const relevantSnippets = snippets.filter(snippet =>
+      snippet.type === 'Context' &&
+      snippet.enabled !== false &&
       snippet.sites.some(url => tab.url.includes(url))
     );
 
     if (relevantSnippets.length > 0) {
-      chrome.contextMenus.create({ 
-        id: "codeSnippetInjector", 
-        title: "Scriptor", 
-        contexts: ["page"] 
+      chrome.contextMenus.create({
+        id: "codeSnippetInjector",
+        title: "Scriptor",
+        contexts: ["page"]
       });
 
       relevantSnippets.forEach(snippet => {
@@ -141,8 +146,9 @@ chrome.tabs.onActivated.addListener(activeInfo => {
 });
 
 function runAutoInjection(tab) {
-  snippets.filter(snippet => 
-    snippet.type === 'Auto' && 
+  snippets.filter(snippet =>
+    snippet.type === 'Auto' &&
+    snippet.enabled !== false &&
     snippet.sites.some(url => tab.url.includes(url))
   ).forEach(snippet => {
     const storageKey = `autoSnippetRan-${tab.url}`;
@@ -156,7 +162,7 @@ function runAutoInjection(tab) {
 }
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  const snippet = snippets.find(s => 
+  const snippet = snippets.find(s =>
     s.name.replace(/\s/g, '-').toLowerCase() === info.menuItemId
   );
   if (snippet && snippet.type === 'Context') {
