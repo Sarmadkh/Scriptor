@@ -4,7 +4,6 @@ chrome.storage.local.get('snippets', (result) => {
   if (result.snippets) {
     snippets = result.snippets;
   } else {
-
     fetch(chrome.runtime.getURL('snippets.json'))
       .then(response => response.json())
       .then(data => {
@@ -34,32 +33,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
+// Helper function to check if snippet should run on given URL
+function shouldRunOnUrl(snippetSites, url) {
+  return snippetSites.some(site => {
+    if (site === '*') return true;
+    return url.includes(site);
+  });
+}
+
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   const tab = details;
   snippets.filter(snippet =>
     snippet.type === 'Redirect' &&
     snippet.enabled !== false &&
-    snippet.sites.some(url => tab.url.includes(url))
+    shouldRunOnUrl(snippet.sites, tab.url)
   ).forEach(snippet => {
-    if (snippet.sites.some(url => tab.url.includes(url))) {
-      let newUrl = tab.url;
+    let newUrl = tab.url;
 
-      if (newUrl.includes("#redirected")) {
-        return;
-      }
+    if (newUrl.includes("#redirected")) {
+      return;
+    }
 
-      const fromPattern = snippet.fromPattern;
-      const toPattern = snippet.toPattern;
-      const wildcardRegex = new RegExp(fromPattern.replace('*', '(.*?)'));
+    const fromPattern = snippet.fromPattern;
+    const toPattern = snippet.toPattern;
+    const wildcardRegex = new RegExp(fromPattern.replace('*', '(.*?)'));
 
-      const match = tab.url.match(wildcardRegex);
-      if (match) {
-        newUrl = tab.url.replace(wildcardRegex, toPattern.replace(/\$(\d+)/g, (_, index) => match[index] || ''));
-      }
+    const match = tab.url.match(wildcardRegex);
+    if (match) {
+      newUrl = tab.url.replace(wildcardRegex, toPattern.replace(/\$(\d+)/g, (_, index) => match[index] || ''));
+    }
 
-      if (newUrl !== tab.url) {
-        chrome.tabs.update(tab.tabId, { url: newUrl + "#redirected" });
-      }
+    if (newUrl !== tab.url) {
+      chrome.tabs.update(tab.tabId, { url: newUrl + "#redirected" });
     }
   });
 }, { url: [{ urlMatches: 'http://*/*' }, { urlMatches: 'https://*/*' }] });
@@ -77,7 +82,7 @@ function updateContextMenu(tab) {
     const relevantSnippets = snippets.filter(snippet =>
       snippet.type === 'Context' &&
       snippet.enabled !== false &&
-      snippet.sites.some(url => tab.url.includes(url))
+      shouldRunOnUrl(snippet.sites, tab.url)
     );
 
     if (relevantSnippets.length > 0) {
@@ -100,7 +105,6 @@ function updateContextMenu(tab) {
 }
 
 function injectCode(tabId, jsCode, cssCode) {
-
   if (jsCode && jsCode.trim()) {
     chrome.scripting.executeScript({
       target: { tabId },
@@ -149,7 +153,7 @@ function runAutoInjection(tab) {
   snippets.filter(snippet =>
     snippet.type === 'Auto' &&
     snippet.enabled !== false &&
-    snippet.sites.some(url => tab.url.includes(url))
+    shouldRunOnUrl(snippet.sites, tab.url)
   ).forEach(snippet => {
     const storageKey = `autoSnippetRan-${tab.url}`;
     chrome.storage.local.get([storageKey], (result) => {
