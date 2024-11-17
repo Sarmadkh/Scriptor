@@ -4,6 +4,7 @@
       "cssCode": "",
       "jsCode": "window.alert ('Scriptor Installed');",
       "name": "Installed",
+		"enabled": true,
       "sites": [
         "google.com"
       ],
