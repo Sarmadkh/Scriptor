@@ -3,6 +3,7 @@
 
 <head>
     <title>Scriptor Manager</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <style>
         :root {
             --bg-primary: #1a1b1e;
@@ -26,7 +27,6 @@
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
         }
 
         .header {
@@ -317,6 +317,41 @@
         input:checked + .toggle-slider:before {
             transform: translateX(20px);
         }
+
+        .icon-button {
+            border: none;
+            font-size: 20px;
+            background: none;
+            cursor: pointer;
+            padding: 8px;
+            transition: color 0.3s;
+        }
+
+        .edit-btn {
+            color: #4CAF50;
+        }
+
+        .delete-btn {
+            color: #f44336;
+        }
+
+        .import-btn, .export-btn {
+            color: #2196F3;
+        }
+
+        .add-snippet-btn {
+            color: #4CAF50;
+        }
+
+        .icon-button:hover {
+            opacity: 0.8;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
     </style>
 </head>
 
@@ -327,11 +362,11 @@
                 <h1>Scriptor Manager</h1>
             </div>
             <div class="header-middle">
-                <button id="importBtn" class="btn">Import</button>
-                <button id="exportBtn" class="btn">Export</button>
+                <button class="icon-button import-btn" id="importBtn" title="Import"><i class="fas fa-file-import"></i></button>
+                <button class="icon-button export-btn" id="exportBtn" title="Export"><i class="fas fa-file-export"></i></button>
             </div>
             <div class="header-right">
-                <button id="addSnippet" class="btn btn-success">Add Snippet</button>
+                <button class="icon-button add-snippet-btn" id="addSnippet" title="Add Snippet"><i class="fas fa-plus-circle"></i></button>
             </div>
         </div>
         <div id="snippetList" class="snippet-grid"></div>
