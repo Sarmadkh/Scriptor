@@ -14,7 +14,7 @@ const saveSnippets = async (snippets) => {
   try {
     await chrome.runtime.sendMessage({ type: 'RELOAD_SNIPPETS' });
   } catch (error) {
-    console.log('Background script not ready, snippets saved locally');
+    console.log('Background script not ready, rules saved locally');
   }
   await renderSnippets();
 };
@@ -26,7 +26,7 @@ const exportSnippets = async () => {
 
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'snippets_backup.json';
+  a.download = 'rules_backup.json';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -44,7 +44,7 @@ const importSnippets = async (file) => {
           await renderSnippets();
           resolve();
         } else {
-          reject(new Error('Invalid snippets file format'));
+          reject(new Error('Invalid rules file format'));
         }
       } catch (error) {
         reject(error);
@@ -264,7 +264,7 @@ const renderSnippets = async () => {
   if (!snippets || snippets.length === 0) {
     snippetList.innerHTML = `
       <div class="empty-state">
-        <h3>No snippets yet</h3>
+        <h3>No Rules yet</h3>
         <p>Click the "Add Rule" button to create your first Rule.</p>
       </div>
     `;
