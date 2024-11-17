@@ -87,7 +87,7 @@ document.getElementById('typeInput').addEventListener('change', (e) => {
 exportBtn.addEventListener('click', exportSnippets);
 
 importBtn.addEventListener('click', () => {
-  const isConfirmed = confirm("Importing new snippets will overwrite your existing ones. Do you want to proceed?");
+  const isConfirmed = confirm("Restoring a backup will overwrite all your existing rules. Do you want to proceed?");
   if (isConfirmed) {
     fileInput.click();
   }
@@ -97,16 +97,16 @@ fileInput.addEventListener('change', async (e) => {
   if (e.target.files.length > 0) {
     try {
       await importSnippets(e.target.files[0]);
-      alert('Snippets imported successfully!');
+      alert('Rules imported successfully!');
     } catch (error) {
-      alert('Error importing snippets: ' + error.message);
+      alert('Error importing Rules: ' + error.message);
     }
     fileInput.value = ''; 
   }
 });
 
 addSnippetBtn.addEventListener('click', () => {
-  modalTitle.textContent = 'Add Snippet';
+  modalTitle.textContent = 'Add Rule';
   snippetForm.reset();
   editingSnippetIndex = null;
   snippetModal.classList.add('active');
@@ -121,7 +121,7 @@ cancelBtn.addEventListener('click', () => {
 });
 
 snippetList.addEventListener('click', async (e) => {
-  const button = e.target.closest('button'); // Find the closest button element
+  const button = e.target.closest('button');
   if (!button) return;
 
   if (button.classList.contains('edit-btn')) {
@@ -145,7 +145,7 @@ snippetList.addEventListener('click', async (e) => {
       redirectContainer.style.display = 'none';
     }
 
-    modalTitle.textContent = 'Edit Snippet';
+    modalTitle.textContent = 'Edit Rule';
     editingSnippetIndex = index;
     snippetModal.classList.add('active');
   }
@@ -156,7 +156,7 @@ snippetList.addEventListener('click', async (e) => {
     const snippet = snippets[index];
     const snippetName = snippet.name;
     
-    if (confirm(`Are you sure you want to delete the snippet: "${snippetName}"?`)) {
+    if (confirm(`Are you sure you want to delete the Rule: "${snippetName}"?`)) {
       snippets.splice(index, 1);
       await saveSnippets(snippets);
     }
@@ -173,7 +173,7 @@ snippetForm.addEventListener('submit', async (e) => {
     name: document.getElementById('nameInput').value,
     type: type,
     sites: document.getElementById('sitesInput').value.split('\n').filter(site => site.trim()),
-    enabled: true  // Add this line
+    enabled: true
   };
 
   if (type === 'Redirect') {
@@ -239,7 +239,7 @@ const renderSnippet = (snippet, index) => {
       <label class="toggle-switch">
         <input type="checkbox" class="snippet-toggle" data-index="${index}" 
           ${snippet.enabled !== false ? 'checked' : ''}>
-        <span class="toggle-slider"></span>
+        <span class="toggle-slider" title="Enable / Disable the Rule"></span>
       </label>
     </div>
     ${codeDisplay}
@@ -265,7 +265,7 @@ const renderSnippets = async () => {
     snippetList.innerHTML = `
       <div class="empty-state">
         <h3>No snippets yet</h3>
-        <p>Click the "Add Snippet" button to create your first snippet.</p>
+        <p>Click the "Add Rule" button to create your first Rule.</p>
       </div>
     `;
     return;
