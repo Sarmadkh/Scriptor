@@ -46,16 +46,11 @@ chrome.webNavigation.onBeforeNavigate.addListener((details) => {
 
       const fromPattern = snippet.fromPattern;
       const toPattern = snippet.toPattern;
-      const wildcardRegex = new RegExp(fromPattern.replace(/\*/g, '(.*?)'));
+      const wildcardRegex = new RegExp(fromPattern.replace('*', '(.*?)'));
 
       const match = tab.url.match(wildcardRegex);
       if (match) {
-        newUrl = toPattern;
-        match.forEach((value, index) => {
-          if (index > 0) { 
-            newUrl = newUrl.replace(`$${index}`, value || '');
-          }
-        });
+        newUrl = tab.url.replace(wildcardRegex, toPattern.replace(/\$(\d+)/g, (_, index) => match[index] || ''));
       }
 
       if (newUrl !== tab.url) {
