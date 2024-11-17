@@ -25,5 +25,5 @@ $1, $2, $3 in the redirect urls will match the text that the stars matched. Exam
 
 
 ## Todo List
-1. Make a code run on all sites
-2. Enable/Disable a snippet
+1. ~~Make a code run on all sites~~
+2. ~~Enable/Disable a snippet~~
