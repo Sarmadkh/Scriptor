@@ -172,7 +172,8 @@ snippetForm.addEventListener('submit', async (e) => {
   const newSnippet = {
     name: document.getElementById('nameInput').value,
     type: type,
-    sites: document.getElementById('sitesInput').value.split('\n').filter(site => site.trim())
+    sites: document.getElementById('sitesInput').value.split('\n').filter(site => site.trim()),
+    enabled: true  // Add this line
   };
 
   if (type === 'Redirect') {
@@ -195,7 +196,7 @@ snippetForm.addEventListener('submit', async (e) => {
 
 const renderSnippet = (snippet, index) => {
   const div = document.createElement('div');
-  div.className = 'snippet-card';
+  div.className = `snippet-card ${snippet.enabled !== false ? '' : 'disabled-snippet'}`;
 
   let codeDisplay = '';
   if (snippet.type === 'Redirect') {
@@ -235,9 +236,24 @@ const renderSnippet = (snippet, index) => {
     <div class="snippet-metadata">
       <span class="type-badge">${snippet.type}</span>
       <span class="snippet-sites">${snippet.sites.join(', ')}</span>
+      <label class="toggle-switch">
+        <input type="checkbox" class="snippet-toggle" data-index="${index}" 
+          ${snippet.enabled !== false ? 'checked' : ''}>
+        <span class="toggle-slider"></span>
+      </label>
     </div>
     ${codeDisplay}
   `;
+
+  // Add toggle event listener
+  const toggle = div.querySelector('.snippet-toggle');
+  toggle.addEventListener('change', async (e) => {
+    const snippets = await chrome.storage.local.get('snippets').then(data => data.snippets);
+    snippets[index].enabled = e.target.checked;
+    await saveSnippets(snippets);
+    div.classList.toggle('disabled-snippet', !e.target.checked);
+  });
+
   return div;
 };
 
