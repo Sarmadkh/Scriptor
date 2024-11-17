@@ -33,7 +33,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Helper function to check if snippet should run on given URL
 function shouldRunOnUrl(snippetSites, url) {
   return snippetSites.some(site => {
     if (site === '*') return true;
