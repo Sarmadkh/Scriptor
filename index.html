@@ -83,7 +83,7 @@
         .snippet-header {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
+            align-items: center;
             margin-bottom: 12px;
         }
 
@@ -122,7 +122,7 @@
             align-items: center;
             gap: 8px;
             margin: 8px 0;
-            font-size: 14px;
+            font-size: 17px;
             flex-wrap: nowrap;
         }
 
@@ -362,11 +362,11 @@
                 <h1>Scriptor Manager</h1>
             </div>
             <div class="header-middle">
-                <button class="icon-button import-btn" id="importBtn" title="Import"><i class="fas fa-file-import"></i></button>
-                <button class="icon-button export-btn" id="exportBtn" title="Export"><i class="fas fa-file-export"></i></button>
+                <button class="icon-button export-btn" id="exportBtn" title="Backup"><i class="fas fa-file-export"></i> Backup</button>
+                <button class="icon-button import-btn" id="importBtn" title="Restore"><i class="fas fa-file-import"></i> Restore</button>
             </div>
             <div class="header-right">
-                <button class="icon-button add-snippet-btn" id="addSnippet" title="Add Snippet"><i class="fas fa-plus-circle"></i></button>
+                <button class="icon-button add-snippet-btn" id="addSnippet" title="Add Rule"><i class="fas fa-plus-circle"></i> Add Rule</button>
             </div>
         </div>
         <div id="snippetList" class="snippet-grid"></div>
