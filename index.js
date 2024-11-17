@@ -229,8 +229,8 @@ const renderSnippet = (snippet, index) => {
         <span class="snippet-title">${snippet.name}</span>
       </div>
       <div class="snippet-actions">
-        <button class="icon-button edit-btn" title="Edit" data-index="${index}"><i class="fas fa-edit"></i></button>
-        <button class="icon-button delete-btn" title="Delete" data-index="${index}"><i class="fas fa-trash"></i></button>
+        <button class="icon-button edit-btn" title="Edit Rule" data-index="${index}"><i class="fas fa-edit"></i></button>
+        <button class="icon-button delete-btn" title="Delete Rule" data-index="${index}"><i class="fas fa-trash"></i></button>
       </div>
     </div>
     <div class="snippet-metadata">
@@ -239,7 +239,7 @@ const renderSnippet = (snippet, index) => {
       <label class="toggle-switch">
         <input type="checkbox" class="snippet-toggle" data-index="${index}" 
           ${snippet.enabled !== false ? 'checked' : ''}>
-        <span class="toggle-slider" title="Enable / Disable the Rule"></span>
+        <span class="toggle-slider" title="Enable / Disable Rule"></span>
       </label>
     </div>
     ${codeDisplay}
