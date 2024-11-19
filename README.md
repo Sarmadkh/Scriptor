@@ -1,7 +1,5 @@
 # Scriptor
-A Chrome Extension that lets you inject CSS and JS code
-
-It have the option to Inject Custom CSS and JS snippets to any website.
+A Chrome Extension that lets you inject JS and CSS code to any website,
 
 ## Features
 
