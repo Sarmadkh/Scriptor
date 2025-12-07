@@ -1,281 +1,490 @@
-const loadSnippets = async () => {
-  const response = await chrome.storage.local.get('snippets');
-  if (!response.snippets) {
-    const defaultResponse = await fetch(chrome.runtime.getURL('snippets.json'));
-    const data = await defaultResponse.json();
-    await chrome.storage.local.set({ snippets: data.snippets });
-    return data.snippets;
-  }
-  return response.snippets;
+let store = {
+    sites: [],     // Array of { id, name, pattern, rules: [] }
+    redirects: []  // Array of { id, name, from, to, enabled }
 };
 
-const saveSnippets = async (snippets) => {
-  await chrome.storage.local.set({ snippets });
-  try {
-    await chrome.runtime.sendMessage({ type: 'RELOAD_SNIPPETS' });
-  } catch (error) {
-    console.log('Background script not ready, rules saved locally');
-  }
-  await renderSnippets();
+let activeView = { type: null, id: null };
+let currentEditingSiteId = null;
+
+// --- Initialization ---
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadData();
+    renderSidebar();
+    
+    // Select first item
+    if (store.sites.length > 0) {
+        selectSite(store.sites[0].id);
+    } else {
+        selectRedirects();
+    }
+    
+    // Setup Header Inline Editing
+    setupHeaderEditing();
+});
+
+const loadData = async () => {
+    const data = await chrome.storage.local.get(['sites', 'redirects']);
+    store.sites = data.sites || [];
+    store.redirects = data.redirects || [];
 };
 
-const exportSnippets = async () => {
-  const snippets = await chrome.storage.local.get('snippets').then(data => data.snippets);
-  const blob = new Blob([JSON.stringify({ snippets }, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'rules_backup.json';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+const saveData = async () => {
+    try {
+        await chrome.storage.local.set(store);
+        try { await chrome.runtime.sendMessage({ type: 'UPDATE_RULES' }); } catch (e) {}
+        return true; 
+    } catch (error) {
+        console.error('Save Data Error:', error);
+        if (error.message.includes('QUOTA_BYTES')) {
+            alert("❌ Error: Storage Quota Exceeded. Please delete some rules or split the import.");
+        } else {
+            alert(`❌ Error saving data: ${error.message}`);
+        }
+        return false;
+    }
 };
 
-const importSnippets = async (file) => {
-  return new Promise((resolve, reject) => {
+// --- Sidebar Logic ---
+const renderSidebar = () => {
+    const list = document.getElementById('siteList');
+    list.innerHTML = '';
+    
+    // Sort sites alphabetically by name or pattern
+    const sortedSites = [...store.sites].sort((a, b) => {
+        const nameA = a.name || a.pattern;
+        const nameB = b.name || b.pattern;
+        return nameA.localeCompare(nameB);
+    });
+
+    sortedSites.forEach(site => {
+        const el = document.createElement('div');
+        const displayName = site.name ? site.name : site.pattern;
+        
+        el.className = `nav-item ${activeView.type === 'site' && activeView.id === site.id ? 'active' : ''}`;
+        
+        // Inner HTML with Delete Button (hidden by CSS until hover)
+        el.innerHTML = `
+            <div style="display:flex; align-items:center; gap:10px; flex:1; overflow:hidden;">
+                <i class="fas fa-globe"></i> 
+                <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${displayName}</span>
+            </div>
+            <i class="fas fa-trash nav-delete-btn" title="Delete Site"></i>
+        `;
+        el.title = site.pattern;
+
+        // Click to select site
+        el.onclick = () => selectSite(site.id);
+
+        // Click to delete site (Stop propagation!)
+        const deleteBtn = el.querySelector('.nav-delete-btn');
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteSite(site.id);
+        };
+
+        list.appendChild(el);
+    });
+
+    const redirectNav = document.getElementById('nav-redirects');
+    if (activeView.type === 'redirect') redirectNav.classList.add('active');
+    else redirectNav.classList.remove('active');
+    redirectNav.onclick = () => selectRedirects();
+};
+
+const deleteSite = (siteId) => {
+    const site = store.sites.find(s => s.id === siteId);
+    if(confirm(`Delete site "${site.name || site.pattern}" and all ${site.rules.length} rule(s)?`)) {
+        store.sites = store.sites.filter(s => s.id !== siteId);
+        saveData().then(() => {
+            renderSidebar();
+            // If we deleted the active site, switch view
+            if (activeView.type === 'site' && activeView.id === siteId) {
+                if (store.sites.length > 0) selectSite(store.sites[0].id);
+                else selectRedirects();
+            }
+        });
+    }
+};
+
+// --- Navigation & View Management ---
+const selectSite = (id, updateSidebar = true) => {
+    const site = store.sites.find(s => s.id === id);
+    if (!site) return;
+
+    activeView = { type: 'site', id: id };
+    if(updateSidebar) renderSidebar();
+    
+    // Toggle Header Elements
+    document.getElementById('viewTitleInput').style.display = 'block';
+    document.getElementById('viewSubtitleInput').style.display = 'block';
+    document.getElementById('redirectTitle').style.display = 'none';
+    document.getElementById('redirectSubtitle').style.display = 'none';
+
+    // Set Input Values
+    document.getElementById('viewTitleInput').value = site.name || '';
+    document.getElementById('viewSubtitleInput').value = site.pattern;
+    
+    // Show correct action panel
+    document.getElementById('siteActions').style.display = 'flex';
+    document.getElementById('redirectActions').style.display = 'none';
+
+    // Enable Add Rule button
+    document.getElementById('addRuleBtn').disabled = false;
+
+    renderRulesGrid(site.rules);
+};
+
+const selectRedirects = (updateSidebar = true) => {
+    activeView = { type: 'redirect', id: null };
+    if(updateSidebar) renderSidebar();
+
+    // Toggle Header Elements
+    document.getElementById('viewTitleInput').style.display = 'none';
+    document.getElementById('viewSubtitleInput').style.display = 'none';
+    document.getElementById('redirectTitle').style.display = 'block';
+    document.getElementById('redirectSubtitle').style.display = 'block';
+    
+    // Show correct action panel
+    document.getElementById('siteActions').style.display = 'none';
+    document.getElementById('redirectActions').style.display = 'flex';
+
+    renderRulesGrid(store.redirects, true);
+};
+
+// --- Inline Header Editing Logic ---
+const setupHeaderEditing = () => {
+    const titleInput = document.getElementById('viewTitleInput');
+    const patternInput = document.getElementById('viewSubtitleInput');
+
+    const saveHeaderChanges = () => {
+        if (activeView.type !== 'site') return;
+        const site = store.sites.find(s => s.id === activeView.id);
+        if (!site) return;
+
+        const newName = titleInput.value.trim();
+        const newPattern = patternInput.value.trim();
+
+        // Only save if changed
+        if (site.name !== newName || site.pattern !== newPattern) {
+            site.name = newName;
+            if (newPattern) site.pattern = newPattern; // Prevent empty pattern
+            else patternInput.value = site.pattern; // Revert if empty
+
+            saveData().then(() => {
+                renderSidebar(); // Update sidebar name
+            });
+        }
+    };
+
+    titleInput.addEventListener('blur', saveHeaderChanges);
+    patternInput.addEventListener('blur', saveHeaderChanges);
+    
+    // Optional: Save on Enter key
+    const handleEnter = (e) => { if(e.key === 'Enter') e.target.blur(); };
+    titleInput.addEventListener('keydown', handleEnter);
+    patternInput.addEventListener('keydown', handleEnter);
+};
+
+// --- Rule Grid Rendering ---
+const renderRulesGrid = (rules, isRedirect = false) => {
+    const grid = document.getElementById('rulesGrid');
+    grid.innerHTML = '';
+
+    if (rules.length === 0) {
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);margin-top:40px;">No rules found. Click 'Add' to create one.</div>`;
+        return;
+    }
+
+    rules.forEach(rule => {
+        const card = document.createElement('div');
+        card.className = `card ${rule.enabled ? '' : 'disabled'}`;
+        
+        let icon = isRedirect ? 'fa-exchange-alt' : (rule.type === 'Auto' ? 'fa-bolt' : 'fa-mouse-pointer');
+        let cardDetail = isRedirect ? `${rule.from} → ${rule.to}` : 
+                         (rule.js && rule.css ? 'JS & CSS' : (rule.js ? 'JavaScript' : 'CSS'));
+        
+        card.innerHTML = `
+            <div class="card-top">
+                <div class="card-title"><i class="fas ${icon}" style="margin-right:8px; color:var(--accent)"></i> ${rule.name}</div>
+                <div class="card-badge">${isRedirect ? 'REDIRECT' : rule.type.toUpperCase()}</div>
+            </div>
+            <div style="font-size:12px; color:var(--text-muted); margin-top:8px; height: 36px; overflow: hidden; pointer-events: none;">
+                ${cardDetail}
+            </div>
+            <div class="card-actions">
+                <label class="switch">
+                    <input type="checkbox" ${rule.enabled ? 'checked' : ''} class="rule-toggle">
+                    <span class="slider"></span>
+                </label>
+                <button class="icon-btn delete-btn"><i class="fas fa-trash"></i></button>
+            </div>
+        `;
+
+        // Click Card to Edit (Main Requirement)
+        card.onclick = (e) => {
+            // Check if user clicked specific controls, if so, don't open modal
+            // Note: The switch is inside a label, clicking label triggers input change usually, 
+            // but we stop propagation on the specific elements.
+            openRuleModal(rule);
+        };
+
+        // Stop propagation for Toggle Switch
+        const toggleSwitch = card.querySelector('.switch');
+        toggleSwitch.onclick = (e) => e.stopPropagation();
+        card.querySelector('.rule-toggle').onchange = (e) => {
+            toggleRule(rule.id, e.target.checked);
+        };
+
+        // Stop propagation for Delete Button
+        const delBtn = card.querySelector('.delete-btn');
+        delBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteRule(rule.id);
+        };
+
+        grid.appendChild(card);
+    });
+};
+
+// --- Data Operations (Toggle/Delete Rule) ---
+const toggleRule = (ruleId, enabled) => {
+    if (activeView.type === 'site') {
+        const site = store.sites.find(s => s.id === activeView.id);
+        const rule = site.rules.find(r => r.id === ruleId);
+        if (rule) rule.enabled = enabled;
+    } else {
+        const rule = store.redirects.find(r => r.id === ruleId);
+        if (rule) rule.enabled = enabled;
+    }
+    saveData();
+};
+
+const deleteRule = (ruleId) => {
+    if(!confirm("Are you sure you want to delete this rule?")) return;
+    
+    if (activeView.type === 'site') {
+        const site = store.sites.find(s => s.id === activeView.id);
+        site.rules = site.rules.filter(r => r.id !== ruleId);
+    } else {
+        store.redirects = store.redirects.filter(r => r.id !== ruleId);
+    }
+    saveData();
+    // Re-render immediately to reflect deletion
+    if (activeView.type === 'site') {
+        const site = store.sites.find(s => s.id === activeView.id);
+        renderRulesGrid(site.rules);
+    } else {
+        renderRulesGrid(store.redirects, true);
+    }
+};
+
+// --- Site Management Modal (Only for NEW sites now) ---
+const siteModal = document.getElementById('siteModal');
+const siteNameInput = document.getElementById('siteNameInput');
+const sitePatternInput = document.getElementById('sitePatternInput');
+const siteForm = document.getElementById('siteForm');
+
+// Open "Add Site"
+document.getElementById('addSiteBtn').onclick = () => {
+    siteForm.reset();
+    siteModal.classList.add('active');
+};
+
+// Save New Site
+siteForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const name = siteNameInput.value.trim() || null;
+    const pattern = sitePatternInput.value.trim();
+    
+    if(!pattern) return;
+
+    // Create new site
+    const newSite = {
+        id: Date.now().toString(),
+        name: name,
+        pattern: pattern,
+        rules: []
+    };
+    store.sites.push(newSite);
+
+    closeModals();
+    await saveData();
+    // Select the new site
+    selectSite(newSite.id);
+};
+
+// --- Rule Modal Logic ---
+let currentEditingRule = null;
+
+document.getElementById('addRuleBtn').onclick = () => openRuleModal(null);
+document.getElementById('addRedirectBtn').onclick = () => openRuleModal(null);
+
+const openRuleModal = (rule) => {
+    const isRedirectView = activeView.type === 'redirect';
+    currentEditingRule = rule;
+    const modal = document.getElementById('ruleModal');
+    const form = document.getElementById('ruleForm');
+    
+    form.reset();
+    
+    // UI Adjustments
+    const codeEditors = document.getElementById('injectionEditors');
+    const redirectInputs = document.getElementById('redirectInputs');
+    const typeGroup = document.getElementById('ruleTypeGroup');
+
+    if (isRedirectView) {
+        document.getElementById('ruleModalTitle').textContent = rule ? 'Edit Redirect' : 'New Redirect';
+        codeEditors.style.display = 'none';
+        document.getElementById('editorToggles').style.display = 'none';
+        redirectInputs.style.display = 'block';
+        typeGroup.style.display = 'none'; 
+    } else {
+        document.getElementById('ruleModalTitle').textContent = rule ? 'Edit Rule' : 'New Rule';
+        codeEditors.style.display = 'flex';
+        document.getElementById('editorToggles').style.display = 'flex';
+        redirectInputs.style.display = 'none';
+        typeGroup.style.display = 'block';
+    }
+
+    // Fill Data
+    if (rule) {
+        document.getElementById('ruleName').value = rule.name;
+        if(isRedirectView) {
+            document.getElementById('redirectFrom').value = rule.from;
+            document.getElementById('redirectTo').value = rule.to;
+        } else {
+            document.getElementById('ruleType').value = rule.type;
+            document.getElementById('jsCode').value = rule.js || '';
+            document.getElementById('cssCode').value = rule.css || '';
+        }
+    } else {
+        document.getElementById('js-editor').classList.remove('hidden');
+        document.getElementById('css-editor').classList.remove('hidden');
+        document.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.add('active'));
+    }
+
+    modal.classList.add('active');
+};
+
+document.getElementById('ruleForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const isRedirectView = activeView.type === 'redirect';
+    
+    const ruleData = {
+        id: currentEditingRule ? currentEditingRule.id : Date.now().toString(),
+        name: document.getElementById('ruleName').value,
+        enabled: currentEditingRule ? currentEditingRule.enabled : true
+    };
+
+    if (isRedirectView) {
+        ruleData.from = document.getElementById('redirectFrom').value;
+        ruleData.to = document.getElementById('redirectTo').value;
+        
+        if (currentEditingRule) {
+            const idx = store.redirects.findIndex(r => r.id === currentEditingRule.id);
+            store.redirects[idx] = { ...store.redirects[idx], ...ruleData };
+        } else {
+            store.redirects.push(ruleData);
+        }
+    } else {
+        ruleData.type = document.getElementById('ruleType').value;
+        ruleData.js = document.getElementById('jsCode').value;
+        ruleData.css = document.getElementById('cssCode').value;
+
+        const site = store.sites.find(s => s.id === activeView.id);
+        if (currentEditingRule) {
+            const idx = site.rules.findIndex(r => r.id === currentEditingRule.id);
+            site.rules[idx] = { ...site.rules[idx], ...ruleData };
+        } else {
+            site.rules.push(ruleData);
+        }
+    }
+
+    closeModals();
+    await saveData();
+    // Update view
+    if(activeView.type === 'site') selectSite(activeView.id, false);
+    else selectRedirects(false);
+};
+
+// --- Import / Export Logic ---
+const exportData = () => {
+    const dataToExport = {
+        scriptor_version: '3.0',
+        sites: store.sites,
+        redirects: store.redirects
+    };
+    const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `scriptor_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+const importData = (file) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
-      try {
-        const data = JSON.parse(e.target.result);
-        if (data.snippets && Array.isArray(data.snippets)) {
-          await saveSnippets(data.snippets);
-          await renderSnippets();
-          resolve();
-        } else {
-          reject(new Error('Invalid rules file format'));
+        const originalSites = [...store.sites];
+        const originalRedirects = [...store.redirects];
+        try {
+            const data = JSON.parse(e.target.result);
+            if (!data.sites || !Array.isArray(data.sites) || !data.redirects || !Array.isArray(data.redirects)) {
+                alert('❌ Invalid file format.');
+                return;
+            }
+            if(confirm('This will overwrite all existing rules. Continue?')) {
+                store.sites = data.sites;
+                store.redirects = data.redirects;
+                const success = await saveData(); 
+                if (success) {
+                    alert('✅ Rules imported!');
+                    if (store.sites.length > 0) selectSite(store.sites[0].id);
+                    else selectRedirects();
+                } else {
+                    store.sites = originalSites;
+                    store.redirects = originalRedirects;
+                    await loadData();
+                    renderSidebar();
+                }
+            }
+        } catch (err) {
+            alert('❌ Error parsing file.');
         }
-      } catch (error) {
-        reject(error);
-      }
     };
-    reader.onerror = () => reject(new Error('Error reading file'));
     reader.readAsText(file);
-  });
 };
-
-const snippetList = document.getElementById('snippetList');
-const snippetModal = document.getElementById('snippetModal');
-const snippetForm = document.getElementById('snippetForm');
-const addSnippetBtn = document.getElementById('addSnippet');
-const cancelBtn = document.getElementById('cancelBtn');
-const modalTitle = document.getElementById('modalTitle');
 
 const fileInput = document.createElement('input');
 fileInput.type = 'file';
 fileInput.accept = '.json';
-fileInput.style.display = 'none';
-document.body.appendChild(fileInput);
-
-const codeContainer = document.getElementById('codeContainer');
-const redirectContainer = document.getElementById('redirectContainer');
-
-let editingSnippetIndex = null;
-
-document.getElementById('typeInput').addEventListener('change', (e) => {
-  const type = e.target.value;
-  if (type === 'Redirect') {
-    codeContainer.style.display = 'none';
-    redirectContainer.style.display = 'block';
-  } else {
-    codeContainer.style.display = 'block';
-    redirectContainer.style.display = 'none';
-  }
-});
-
-exportBtn.addEventListener('click', exportSnippets);
-
-importBtn.addEventListener('click', () => {
-  const isConfirmed = confirm("Restoring a backup will overwrite all your existing rules. Do you want to proceed?");
-  if (isConfirmed) {
-    fileInput.click();
-  }
-});
-
-fileInput.addEventListener('change', async (e) => {
-  if (e.target.files.length > 0) {
-    try {
-      await importSnippets(e.target.files[0]);
-      alert('Rules imported successfully!');
-    } catch (error) {
-      alert('Error importing Rules: ' + error.message);
-    }
-    fileInput.value = ''; 
-  }
-});
-
-addSnippetBtn.addEventListener('click', () => {
-  modalTitle.textContent = 'Add Rule';
-  snippetForm.reset();
-  editingSnippetIndex = null;
-  snippetModal.classList.add('active');
-
-  const type = document.getElementById('typeInput').value;
-  codeContainer.style.display = type === 'Redirect' ? 'none' : 'block';
-  redirectContainer.style.display = type === 'Redirect' ? 'block' : 'none';
-});
-
-cancelBtn.addEventListener('click', () => {
-  snippetModal.classList.remove('active');
-});
-
-snippetList.addEventListener('click', async (e) => {
-  const button = e.target.closest('button');
-  if (!button) return;
-
-  if (button.classList.contains('edit-btn')) {
-    const index = parseInt(button.dataset.index);
-    const snippets = await chrome.storage.local.get('snippets').then(data => data.snippets);
-    const snippet = snippets[index];
-
-    document.getElementById('nameInput').value = snippet.name;
-    document.getElementById('typeInput').value = snippet.type;
-    document.getElementById('sitesInput').value = snippet.sites.join('\n');
-
-    if (snippet.type === 'Redirect') {
-      document.getElementById('fromPatternInput').value = snippet.fromPattern;
-      document.getElementById('toPatternInput').value = snippet.toPattern;
-      codeContainer.style.display = 'none';
-      redirectContainer.style.display = 'block';
-    } else {
-      document.getElementById('jsCodeInput').value = snippet.jsCode || '';
-      document.getElementById('cssCodeInput').value = snippet.cssCode || '';
-      codeContainer.style.display = 'block';
-      redirectContainer.style.display = 'none';
-    }
-
-    modalTitle.textContent = 'Edit Rule';
-    editingSnippetIndex = index;
-    snippetModal.classList.add('active');
-  }
-
-  if (button.classList.contains('delete-btn')) {
-    const index = parseInt(button.dataset.index);
-    const snippets = await chrome.storage.local.get('snippets').then(data => data.snippets);
-    const snippet = snippets[index];
-    const snippetName = snippet.name;
-    
-    if (confirm(`Are you sure you want to delete the Rule: "${snippetName}"?`)) {
-      snippets.splice(index, 1);
-      await saveSnippets(snippets);
-    }
-  }
-});
-
-snippetForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-
-  const snippets = await chrome.storage.local.get('snippets').then(data => data.snippets || []);
-
-  const type = document.getElementById('typeInput').value;
-  const newSnippet = {
-    name: document.getElementById('nameInput').value,
-    type: type,
-    sites: document.getElementById('sitesInput').value.split('\n').filter(site => site.trim()),
-    enabled: true
-  };
-
-  if (type === 'Redirect') {
-    newSnippet.fromPattern = document.getElementById('fromPatternInput').value;
-    newSnippet.toPattern = document.getElementById('toPatternInput').value;
-  } else {
-    newSnippet.jsCode = document.getElementById('jsCodeInput').value;
-    newSnippet.cssCode = document.getElementById('cssCodeInput').value;
-  }
-
-  if (editingSnippetIndex !== null) {
-    snippets[editingSnippetIndex] = newSnippet;
-  } else {
-    snippets.push(newSnippet);
-  }
-
-  await saveSnippets(snippets);
-  snippetModal.classList.remove('active');
-});
-
-const renderSnippet = (snippet, index) => {
-  const div = document.createElement('div');
-  div.className = `snippet-card ${snippet.enabled !== false ? '' : 'disabled-snippet'}`;
-
-  let codeDisplay = '';
-  if (snippet.type === 'Redirect') {
-    codeDisplay = `
-      <div class="code-section">
-        <div class="code-label">From Pattern:</div>
-        <code>${snippet.fromPattern}</code>
-        <div class="code-label">To Pattern:</div>
-        <code>${snippet.toPattern}</code>
-      </div>
-    `;
-  } else {
-    codeDisplay = `
-      <div class="code-section">
-        ${snippet.jsCode ? `
-          <div class="code-label">JavaScript:</div>
-          <code>${snippet.jsCode}</code>
-        ` : ''}
-        ${snippet.cssCode ? `
-          <div class="code-label">CSS:</div>
-          <code>${snippet.cssCode}</code>
-        ` : ''}
-      </div>
-    `;
-  }
-
-  div.innerHTML = `
-    <div class="snippet-header">
-      <div class="snippet-title-container">
-        <span class="snippet-title">${snippet.name}</span>
-      </div>
-      <div class="snippet-actions">
-        <button class="icon-button edit-btn" title="Edit Rule" data-index="${index}"><i class="fas fa-edit"></i></button>
-        <button class="icon-button delete-btn" title="Delete Rule" data-index="${index}"><i class="fas fa-trash"></i></button>
-      </div>
-    </div>
-    <div class="snippet-metadata">
-      <span class="type-badge">${snippet.type}</span>
-      <span class="snippet-sites">${snippet.sites.join(', ')}</span>
-      <label class="toggle-switch">
-        <input type="checkbox" class="snippet-toggle" data-index="${index}" 
-          ${snippet.enabled !== false ? 'checked' : ''}>
-        <span class="toggle-slider" title="Enable / Disable Rule"></span>
-      </label>
-    </div>
-    ${codeDisplay}
-  `;
-
-  // Add toggle event listener
-  const toggle = div.querySelector('.snippet-toggle');
-  toggle.addEventListener('change', async (e) => {
-    const snippets = await chrome.storage.local.get('snippets').then(data => data.snippets);
-    snippets[index].enabled = e.target.checked;
-    await saveSnippets(snippets);
-    div.classList.toggle('disabled-snippet', !e.target.checked);
-  });
-
-  return div;
+fileInput.onchange = (e) => {
+    if (e.target.files.length > 0) importData(e.target.files[0]);
 };
 
-const renderSnippets = async () => {
-  const snippets = await chrome.storage.local.get('snippets').then(data => data.snippets);
-  snippetList.innerHTML = '';
-
-  if (!snippets || snippets.length === 0) {
-    snippetList.innerHTML = `
-      <div class="empty-state">
-        <h3>No Rules yet</h3>
-        <p>Click the "Add Rule" button to create your first Rule.</p>
-      </div>
-    `;
-    return;
-  }
-
-  snippets.forEach((snippet, index) => {
-    snippetList.appendChild(renderSnippet(snippet, index));
-  });
+// --- Utility Functions ---
+window.closeModals = () => {
+    document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
 };
 
-document.addEventListener('DOMContentLoaded', async () => {
-  await renderSnippets();
+document.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.onclick = () => {
+        btn.classList.toggle('active');
+        const targetId = btn.dataset.target;
+        const el = document.getElementById(targetId);
+        if (btn.classList.contains('active')) el.classList.remove('hidden');
+        else el.classList.add('hidden');
+    };
+});
+
+// --- Event Listener Attachment ---
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.cancel-btn').forEach(button => {
+        button.addEventListener('click', closeModals);
+    });
+    document.getElementById('exportBtn').addEventListener('click', exportData);
+    document.getElementById('importBtn').addEventListener('click', () => fileInput.click());
 });
