@@ -1,180 +1,152 @@
-let snippets = [];
+let store = { sites: [], redirects: [] };
 
-chrome.storage.local.get('snippets', (result) => {
-  if (result.snippets) {
-    snippets = result.snippets;
-  } else {
-    fetch(chrome.runtime.getURL('snippets.json'))
-      .then(response => response.json())
-      .then(data => {
-        snippets = data.snippets;
-        chrome.storage.local.set({ snippets: data.snippets });
-      });
-  }
+// Initial Load
+chrome.storage.local.get(['sites', 'redirects'], (result) => {
+    store.sites = result.sites || [];
+    store.redirects = result.redirects || [];
 });
 
-chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'local' && changes.snippets) {
-    snippets = changes.snippets.newValue;
-    updateContextMenus();
-  }
+// Update Listener
+chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'UPDATE_RULES') {
+        chrome.storage.local.get(['sites', 'redirects'], (result) => {
+            store.sites = result.sites || [];
+            store.redirects = result.redirects || [];
+        });
+    }
 });
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'RELOAD_SNIPPETS') {
-    chrome.storage.local.get('snippets', (result) => {
-      if (result.snippets) {
-        snippets = result.snippets;
-        updateContextMenus();
-        sendResponse({ success: true });
-      }
-    });
-    return true;
-  }
-});
-
-function shouldRunOnUrl(snippetSites, url) {
-  return snippetSites.some(site => {
-    if (site === '*') return true;
-    return url.includes(site);
-  });
+// Helper: Match URL Pattern
+function urlMatches(pattern, url) {
+    if (pattern === '*') return true;
+    // Basic Wildcard Match
+    const regexStr = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*');
+    const regex = new RegExp(`^${regexStr}$`); // Strict match for redirects usually
+    // For sites, we might want partial match? 
+    // Usually user puts "google.com", we assume "contains" or specific logic?
+    // Let's stick to: if pattern has *, use regex. If not, check includes.
+    if(pattern.includes('*')) {
+        return new RegExp(pattern.replace(/\*/g, '.*')).test(url);
+    }
+    return url.includes(pattern);
 }
 
+// 1. Redirects
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
-  const tab = details;
-  snippets.filter(snippet =>
-    snippet.type === 'Redirect' &&
-    snippet.enabled !== false &&
-    shouldRunOnUrl(snippet.sites, tab.url)
-  ).forEach(snippet => {
-    let newUrl = tab.url;
+    if (details.frameId !== 0) return;
+    
+    store.redirects.forEach(rule => {
+        if (!rule.enabled) return;
+        
+        // Convert wildcard to capture group regex for redirects
+        // e.g. "old.com/*" -> "old\.com/(.*)"
+        const pattern = rule.from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '(.*)');
+        const regex = new RegExp(`^${pattern}$`);
+        const match = details.url.match(regex);
 
-    if (newUrl.includes("#redirected")) {
-      return;
-    }
-
-    const fromPattern = snippet.fromPattern;
-    const toPattern = snippet.toPattern;
-    const wildcardRegex = new RegExp(fromPattern.replace('*', '(.*?)'));
-
-    const match = tab.url.match(wildcardRegex);
-    if (match) {
-      newUrl = tab.url.replace(wildcardRegex, toPattern.replace(/\$(\d+)/g, (_, index) => match[index] || ''));
-    }
-
-    if (newUrl !== tab.url) {
-      chrome.tabs.update(tab.tabId, { url: newUrl + "#redirected" });
-    }
-  });
+        if (match) {
+            let newUrl = rule.to;
+            // Replace $1, $2 with captured groups
+            for (let i = 1; i < match.length; i++) {
+                newUrl = newUrl.replace(`$${i}`, match[i]);
+            }
+            if (newUrl !== details.url) {
+                chrome.tabs.update(details.tabId, { url: newUrl });
+            }
+        }
+    });
 }, { url: [{ urlMatches: 'http://*/*' }, { urlMatches: 'https://*/*' }] });
 
-function updateContextMenus() {
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (tabs[0]) {
-      updateContextMenu(tabs[0]);
-    }
-  });
-}
 
-function updateContextMenu(tab) {
-  chrome.contextMenus.removeAll(() => {
-    const relevantSnippets = snippets.filter(snippet =>
-      snippet.type === 'Context' &&
-      snippet.enabled !== false &&
-      shouldRunOnUrl(snippet.sites, tab.url)
-    );
-
-    if (relevantSnippets.length > 0) {
-      chrome.contextMenus.create({
-        id: "codeSnippetInjector",
-        title: "Scriptor",
-        contexts: ["page"]
-      });
-
-      relevantSnippets.forEach(snippet => {
-        chrome.contextMenus.create({
-          id: snippet.name.replace(/\s/g, '-').toLowerCase(),
-          parentId: "codeSnippetInjector",
-          title: snippet.name,
-          contexts: ["page"]
-        });
-      });
-    }
-  });
-}
-
-function injectCode(tabId, jsCode, cssCode) {
-  if (jsCode && jsCode.trim()) {
-    chrome.scripting.executeScript({
-      target: { tabId },
-      world: "MAIN",
-      args: [jsCode],
-      func: (codeString) => {
-        const script = document.createElement('script');
-        script.textContent = codeString;
-        document.documentElement.appendChild(script);
-        script.remove();
-      }
-    });
-  }
-
-  if (cssCode && cssCode.trim()) {
-    chrome.scripting.executeScript({
-      target: { tabId },
-      func: (cssString) => {
-        const style = document.createElement('style');
-        style.textContent = cssString;
-        document.head.appendChild(style);
-      },
-      args: [cssCode]
-    });
-  }
-}
-
+// 2. Tab Updates (Context Menu & Auto Injection)
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === "loading") {
-    chrome.storage.local.remove([`autoSnippetRan-${tab.url}`]);
-  }
-  if (changeInfo.status === "complete") {
-    updateContextMenu(tab);
-    runAutoInjection(tab);
-  }
+    if (changeInfo.status === 'complete' && tab.url) {
+        processTab(tab);
+    }
 });
 
-chrome.tabs.onActivated.addListener(activeInfo => {
-  chrome.tabs.get(activeInfo.tabId, (tab) => {
-    updateContextMenu(tab);
-    runAutoInjection(tab);
-  });
-});
+function processTab(tab) {
+    // 1. Find all matching Sites
+    const matchingSites = store.sites.filter(site => urlMatches(site.pattern, tab.url));
+    
+    // 2. Collect Context Menu Rules
+    const contextRules = [];
+    
+    matchingSites.forEach(site => {
+        site.rules.forEach(rule => {
+            if (!rule.enabled) return;
 
-function runAutoInjection(tab) {
-  snippets.filter(snippet =>
-    snippet.type === 'Auto' &&
-    snippet.enabled !== false &&
-    shouldRunOnUrl(snippet.sites, tab.url)
-  ).forEach(snippet => {
-    const storageKey = `autoSnippetRan-${tab.url}`;
-    chrome.storage.local.get([storageKey], (result) => {
-      if (!result[storageKey]) {
-        injectCode(tab.id, snippet.jsCode, snippet.cssCode);
-        chrome.storage.local.set({ [storageKey]: true });
-      }
+            // Auto Inject
+            if (rule.type === 'Auto') {
+                injectCode(tab.id, rule.js, rule.css);
+            } 
+            // Collect Context Items
+            else if (rule.type === 'Context') {
+                contextRules.push(rule);
+            }
+        });
     });
-  });
+
+    updateContextMenu(contextRules);
+}
+
+function updateContextMenu(rules) {
+    chrome.contextMenus.removeAll(() => {
+        if (rules.length === 0) return;
+
+        chrome.contextMenus.create({
+            id: "scriptor-root",
+            title: "Scriptor",
+            contexts: ["page"]
+        });
+
+        rules.forEach(rule => {
+            chrome.contextMenus.create({
+                parentId: "scriptor-root",
+                id: `run-${rule.id}`,
+                title: rule.name,
+                contexts: ["page"]
+            });
+        });
+    });
 }
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  const snippet = snippets.find(s =>
-    s.name.replace(/\s/g, '-').toLowerCase() === info.menuItemId
-  );
-  if (snippet && snippet.type === 'Context') {
-    injectCode(tab.id, snippet.jsCode, snippet.cssCode);
-  }
+    if (info.menuItemId.startsWith('run-')) {
+        const ruleId = info.menuItemId.replace('run-', '');
+        // Find rule across all sites (slightly inefficient but safe)
+        for (const site of store.sites) {
+            const rule = site.rules.find(r => r.id === ruleId);
+            if (rule) {
+                injectCode(tab.id, rule.js, rule.css);
+                break;
+            }
+        }
+    }
 });
 
-chrome.action.onClicked.addListener((tab) => {
-  chrome.tabs.create({
-    url: chrome.runtime.getURL('index.html')
-  });
+function injectCode(tabId, js, css) {
+    if (css && css.trim()) {
+        chrome.scripting.insertCSS({
+            target: { tabId },
+            css: css
+        }).catch(() => {});
+    }
+    if (js && js.trim()) {
+        chrome.scripting.executeScript({
+            target: { tabId },
+            world: "MAIN",
+            func: (code) => {
+                const s = document.createElement('script');
+                s.textContent = code;
+                document.body.appendChild(s);
+                s.remove();
+            },
+            args: [js]
+        }).catch(() => {});
+    }
+}
+
+chrome.action.onClicked.addListener(() => {
+    chrome.tabs.create({ url: 'index.html' });
 });
