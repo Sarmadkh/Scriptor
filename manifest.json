@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Scriptor",
-  "version": "1.0",
+  "version": "2.0",
   "description": "Inject Custom Code Snippets to a Website",
   "permissions": [
     "contextMenus",
@@ -21,7 +21,7 @@
     "default_title": "Scriptor"
   },
   "web_accessible_resources": [{
-    "resources": ["snippets.json", "index.html", "index.js", "styles.css"],
+    "resources": ["index.html", "index.js", "styles.css"],
     "matches": ["<all_urls>"]
   }]
 }
