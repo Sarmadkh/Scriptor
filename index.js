@@ -1,6 +1,6 @@
 let store = {
-    sites: [],     // Array of { id, name, pattern, rules: [] }
-    redirects: []  // Array of { id, name, from, to, enabled }
+    sites: [],
+    redirects: []
 };
 
 let activeView = { type: null, id: null };
@@ -10,15 +10,13 @@ let currentEditingSiteId = null;
 document.addEventListener('DOMContentLoaded', async () => {
     await loadData();
     renderSidebar();
-    
-    // Select first item
+
     if (store.sites.length > 0) {
         selectSite(store.sites[0].id);
     } else {
         selectRedirects();
     }
-    
-    // Setup Header Inline Editing
+
     setupHeaderEditing();
 });
 
@@ -31,8 +29,8 @@ const loadData = async () => {
 const saveData = async () => {
     try {
         await chrome.storage.local.set(store);
-        try { await chrome.runtime.sendMessage({ type: 'UPDATE_RULES' }); } catch (e) {}
-        return true; 
+        try { await chrome.runtime.sendMessage({ type: 'UPDATE_RULES' }); } catch (e) { }
+        return true;
     } catch (error) {
         console.error('Save Data Error:', error);
         if (error.message.includes('QUOTA_BYTES')) {
@@ -48,8 +46,7 @@ const saveData = async () => {
 const renderSidebar = () => {
     const list = document.getElementById('siteList');
     list.innerHTML = '';
-    
-    // Sort sites alphabetically by name or pattern
+
     const sortedSites = [...store.sites].sort((a, b) => {
         const nameA = a.name || a.pattern;
         const nameB = b.name || b.pattern;
@@ -59,10 +56,9 @@ const renderSidebar = () => {
     sortedSites.forEach(site => {
         const el = document.createElement('div');
         const displayName = site.name ? site.name : site.pattern;
-        
+
         el.className = `nav-item ${activeView.type === 'site' && activeView.id === site.id ? 'active' : ''}`;
-        
-        // Inner HTML with Delete Button (hidden by CSS until hover)
+
         el.innerHTML = `
             <div style="display:flex; align-items:center; gap:10px; flex:1; overflow:hidden;">
                 <i class="fas fa-globe"></i> 
@@ -71,11 +67,8 @@ const renderSidebar = () => {
             <i class="fas fa-trash nav-delete-btn" title="Delete Site"></i>
         `;
         el.title = site.pattern;
-
-        // Click to select site
         el.onclick = () => selectSite(site.id);
 
-        // Click to delete site (Stop propagation!)
         const deleteBtn = el.querySelector('.nav-delete-btn');
         deleteBtn.onclick = (e) => {
             e.stopPropagation();
@@ -93,11 +86,10 @@ const renderSidebar = () => {
 
 const deleteSite = (siteId) => {
     const site = store.sites.find(s => s.id === siteId);
-    if(confirm(`Delete site "${site.name || site.pattern}" and all ${site.rules.length} rule(s)?`)) {
+    if (confirm(`Delete site "${site.name || site.pattern}" and all ${site.rules.length} rule(s)?`)) {
         store.sites = store.sites.filter(s => s.id !== siteId);
         saveData().then(() => {
             renderSidebar();
-            // If we deleted the active site, switch view
             if (activeView.type === 'site' && activeView.id === siteId) {
                 if (store.sites.length > 0) selectSite(store.sites[0].id);
                 else selectRedirects();
@@ -112,42 +104,30 @@ const selectSite = (id, updateSidebar = true) => {
     if (!site) return;
 
     activeView = { type: 'site', id: id };
-    if(updateSidebar) renderSidebar();
-    
-    // Toggle Header Elements
+    if (updateSidebar) renderSidebar();
+
     document.getElementById('viewTitleInput').style.display = 'block';
     document.getElementById('viewSubtitleInput').style.display = 'block';
     document.getElementById('redirectTitle').style.display = 'none';
     document.getElementById('redirectSubtitle').style.display = 'none';
-
-    // Set Input Values
     document.getElementById('viewTitleInput').value = site.name || '';
     document.getElementById('viewSubtitleInput').value = site.pattern;
-    
-    // Show correct action panel
     document.getElementById('siteActions').style.display = 'flex';
     document.getElementById('redirectActions').style.display = 'none';
-
-    // Enable Add Rule button
     document.getElementById('addRuleBtn').disabled = false;
-
     renderRulesGrid(site.rules);
 };
 
 const selectRedirects = (updateSidebar = true) => {
     activeView = { type: 'redirect', id: null };
-    if(updateSidebar) renderSidebar();
+    if (updateSidebar) renderSidebar();
 
-    // Toggle Header Elements
     document.getElementById('viewTitleInput').style.display = 'none';
     document.getElementById('viewSubtitleInput').style.display = 'none';
     document.getElementById('redirectTitle').style.display = 'block';
     document.getElementById('redirectSubtitle').style.display = 'block';
-    
-    // Show correct action panel
     document.getElementById('siteActions').style.display = 'none';
     document.getElementById('redirectActions').style.display = 'flex';
-
     renderRulesGrid(store.redirects, true);
 };
 
@@ -164,23 +144,21 @@ const setupHeaderEditing = () => {
         const newName = titleInput.value.trim();
         const newPattern = patternInput.value.trim();
 
-        // Only save if changed
         if (site.name !== newName || site.pattern !== newPattern) {
             site.name = newName;
-            if (newPattern) site.pattern = newPattern; // Prevent empty pattern
-            else patternInput.value = site.pattern; // Revert if empty
+            if (newPattern) site.pattern = newPattern;
+            else patternInput.value = site.pattern;
 
             saveData().then(() => {
-                renderSidebar(); // Update sidebar name
+                renderSidebar();
             });
         }
     };
 
     titleInput.addEventListener('blur', saveHeaderChanges);
     patternInput.addEventListener('blur', saveHeaderChanges);
-    
-    // Optional: Save on Enter key
-    const handleEnter = (e) => { if(e.key === 'Enter') e.target.blur(); };
+
+    const handleEnter = (e) => { if (e.key === 'Enter') e.target.blur(); };
     titleInput.addEventListener('keydown', handleEnter);
     patternInput.addEventListener('keydown', handleEnter);
 };
@@ -198,17 +176,17 @@ const renderRulesGrid = (rules, isRedirect = false) => {
     rules.forEach(rule => {
         const card = document.createElement('div');
         card.className = `card ${rule.enabled ? '' : 'disabled'}`;
-        
+
         let icon = isRedirect ? 'fa-exchange-alt' : (rule.type === 'Auto' ? 'fa-bolt' : 'fa-mouse-pointer');
-        let cardDetail = isRedirect ? `${rule.from} → ${rule.to}` : 
-                         (rule.js && rule.css ? 'JS & CSS' : (rule.js ? 'JavaScript' : 'CSS'));
-        
+        let cardDetail = isRedirect ? `${rule.from} → ${rule.to}` :
+            (rule.js ? 'JavaScript' : '') + (rule.css ? ' CSS' : '') + (rule.html ? ' HTML' : '');
+
         card.innerHTML = `
             <div class="card-top">
                 <div class="card-title"><i class="fas ${icon}" style="margin-right:8px; color:var(--accent)"></i> ${rule.name}</div>
                 <div class="card-badge">${isRedirect ? 'REDIRECT' : rule.type.toUpperCase()}</div>
             </div>
-            <div style="font-size:12px; color:var(--text-muted); margin-top:8px; height: 36px; overflow: hidden; pointer-events: none;">
+            <div style="font-size:12px; color:var(--text-muted); margin-top:8px; height: 40px; overflow: hidden; pointer-events: none;">
                 ${cardDetail}
             </div>
             <div class="card-actions">
@@ -220,22 +198,16 @@ const renderRulesGrid = (rules, isRedirect = false) => {
             </div>
         `;
 
-        // Click Card to Edit (Main Requirement)
         card.onclick = (e) => {
-            // Check if user clicked specific controls, if so, don't open modal
-            // Note: The switch is inside a label, clicking label triggers input change usually, 
-            // but we stop propagation on the specific elements.
             openRuleModal(rule);
         };
 
-        // Stop propagation for Toggle Switch
         const toggleSwitch = card.querySelector('.switch');
         toggleSwitch.onclick = (e) => e.stopPropagation();
         card.querySelector('.rule-toggle').onchange = (e) => {
             toggleRule(rule.id, e.target.checked);
         };
 
-        // Stop propagation for Delete Button
         const delBtn = card.querySelector('.delete-btn');
         delBtn.onclick = (e) => {
             e.stopPropagation();
@@ -260,16 +232,26 @@ const toggleRule = (ruleId, enabled) => {
 };
 
 const deleteRule = (ruleId) => {
-    if(!confirm("Are you sure you want to delete this rule?")) return;
-    
+    let ruleToDelete;
+    if (activeView.type === 'site') {
+        const site = store.sites.find(s => s.id === activeView.id);
+        ruleToDelete = site.rules.find(r => r.id === ruleId);
+    } else {
+        ruleToDelete = store.redirects.find(r => r.id === ruleId);
+    }
+
+    if (!ruleToDelete) return;
+    if (!confirm(`Are you sure you want to delete the rule "${ruleToDelete.name}"?`)) return;
+
     if (activeView.type === 'site') {
         const site = store.sites.find(s => s.id === activeView.id);
         site.rules = site.rules.filter(r => r.id !== ruleId);
     } else {
         store.redirects = store.redirects.filter(r => r.id !== ruleId);
     }
+
     saveData();
-    // Re-render immediately to reflect deletion
+
     if (activeView.type === 'site') {
         const site = store.sites.find(s => s.id === activeView.id);
         renderRulesGrid(site.rules);
@@ -284,21 +266,18 @@ const siteNameInput = document.getElementById('siteNameInput');
 const sitePatternInput = document.getElementById('sitePatternInput');
 const siteForm = document.getElementById('siteForm');
 
-// Open "Add Site"
 document.getElementById('addSiteBtn').onclick = () => {
     siteForm.reset();
     siteModal.classList.add('active');
 };
 
-// Save New Site
 siteForm.onsubmit = async (e) => {
     e.preventDefault();
     const name = siteNameInput.value.trim() || null;
     const pattern = sitePatternInput.value.trim();
-    
-    if(!pattern) return;
 
-    // Create new site
+    if (!pattern) return;
+
     const newSite = {
         id: Date.now().toString(),
         name: name,
@@ -309,7 +288,6 @@ siteForm.onsubmit = async (e) => {
 
     closeModals();
     await saveData();
-    // Select the new site
     selectSite(newSite.id);
 };
 
@@ -324,10 +302,9 @@ const openRuleModal = (rule) => {
     currentEditingRule = rule;
     const modal = document.getElementById('ruleModal');
     const form = document.getElementById('ruleForm');
-    
+
     form.reset();
-    
-    // UI Adjustments
+
     const codeEditors = document.getElementById('injectionEditors');
     const redirectInputs = document.getElementById('redirectInputs');
     const typeGroup = document.getElementById('ruleTypeGroup');
@@ -337,7 +314,7 @@ const openRuleModal = (rule) => {
         codeEditors.style.display = 'none';
         document.getElementById('editorToggles').style.display = 'none';
         redirectInputs.style.display = 'block';
-        typeGroup.style.display = 'none'; 
+        typeGroup.style.display = 'none';
     } else {
         document.getElementById('ruleModalTitle').textContent = rule ? 'Edit Rule' : 'New Rule';
         codeEditors.style.display = 'flex';
@@ -346,20 +323,52 @@ const openRuleModal = (rule) => {
         typeGroup.style.display = 'block';
     }
 
-    // Fill Data
     if (rule) {
         document.getElementById('ruleName').value = rule.name;
-        if(isRedirectView) {
+
+        if (isRedirectView) {
             document.getElementById('redirectFrom').value = rule.from;
             document.getElementById('redirectTo').value = rule.to;
         } else {
             document.getElementById('ruleType').value = rule.type;
-            document.getElementById('jsCode').value = rule.js || '';
-            document.getElementById('cssCode').value = rule.css || '';
+
+            const js = rule.js || '';
+            const css = rule.css || '';
+            const html = rule.html || '';
+
+            document.getElementById('jsCode').value = js;
+            document.getElementById('cssCode').value = css;
+            document.getElementById('htmlCode').value = html;
+
+            const sections = [
+                { id: 'js-editor', content: js },
+                { id: 'css-editor', content: css },
+                { id: 'html-editor', content: html }
+            ];
+
+            sections.forEach(section => {
+                const editorEl = document.getElementById(section.id);
+                const toggleBtn = document.querySelector(`.toggle-btn[data-target="${section.id}"]`);
+                const hasContent = section.content.trim().length > 0;
+
+                if (hasContent) {
+                    editorEl.classList.remove('hidden');
+                    toggleBtn.classList.add('active');
+                } else {
+                    editorEl.classList.add('hidden');
+                    toggleBtn.classList.remove('active');
+                }
+            });
+
+            if (!js.trim() && !css.trim() && !html.trim()) {
+                document.getElementById('js-editor').classList.remove('hidden');
+                document.querySelector(`.toggle-btn[data-target="js-editor"]`).classList.add('active');
+            }
         }
     } else {
         document.getElementById('js-editor').classList.remove('hidden');
         document.getElementById('css-editor').classList.remove('hidden');
+        document.getElementById('html-editor').classList.remove('hidden');
         document.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.add('active'));
     }
 
@@ -369,7 +378,7 @@ const openRuleModal = (rule) => {
 document.getElementById('ruleForm').onsubmit = async (e) => {
     e.preventDefault();
     const isRedirectView = activeView.type === 'redirect';
-    
+
     const ruleData = {
         id: currentEditingRule ? currentEditingRule.id : Date.now().toString(),
         name: document.getElementById('ruleName').value,
@@ -379,7 +388,7 @@ document.getElementById('ruleForm').onsubmit = async (e) => {
     if (isRedirectView) {
         ruleData.from = document.getElementById('redirectFrom').value;
         ruleData.to = document.getElementById('redirectTo').value;
-        
+
         if (currentEditingRule) {
             const idx = store.redirects.findIndex(r => r.id === currentEditingRule.id);
             store.redirects[idx] = { ...store.redirects[idx], ...ruleData };
@@ -390,6 +399,7 @@ document.getElementById('ruleForm').onsubmit = async (e) => {
         ruleData.type = document.getElementById('ruleType').value;
         ruleData.js = document.getElementById('jsCode').value;
         ruleData.css = document.getElementById('cssCode').value;
+        ruleData.html = document.getElementById('htmlCode').value;
 
         const site = store.sites.find(s => s.id === activeView.id);
         if (currentEditingRule) {
@@ -402,8 +412,7 @@ document.getElementById('ruleForm').onsubmit = async (e) => {
 
     closeModals();
     await saveData();
-    // Update view
-    if(activeView.type === 'site') selectSite(activeView.id, false);
+    if (activeView.type === 'site') selectSite(activeView.id, false);
     else selectRedirects(false);
 };
 
@@ -436,10 +445,10 @@ const importData = (file) => {
                 alert('❌ Invalid file format.');
                 return;
             }
-            if(confirm('This will overwrite all existing rules. Continue?')) {
+            if (confirm('This will overwrite all existing rules. Continue?')) {
                 store.sites = data.sites;
                 store.redirects = data.redirects;
-                const success = await saveData(); 
+                const success = await saveData();
                 if (success) {
                     alert('✅ Rules imported!');
                     if (store.sites.length > 0) selectSite(store.sites[0].id);
