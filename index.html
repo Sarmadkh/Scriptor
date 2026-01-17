@@ -2,6 +2,7 @@
 <html>
 
 <head>
+    <meta charset="UTF-8">
     <title>Scriptor</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
@@ -15,11 +16,11 @@
             </div>
 
             <div class="sidebar-tools">
-                <button class="btn-tool" id="exportBtn" title="Backup Rules">
-                    <i class="fas fa-download"></i> Export
-                </button>
                 <button class="btn-tool" id="importBtn" title="Restore Rules">
-                    <i class="fas fa-upload"></i> Import
+                    <i class="fas fa-download"></i> Import
+                </button>
+                <button class="btn-tool" id="exportBtn" title="Backup Rules">
+                    <i class="fas fa-upload"></i> Export
                 </button>
             </div>
 
@@ -94,8 +95,9 @@
             <div class="modal-header">
                 <h2 id="ruleModalTitle">Edit Rule</h2>
                 <div class="view-toggles" id="editorToggles">
-                    <button type="button" class="toggle-btn active" data-target="js-editor">JS</button>
+                    <button type="button" class="toggle-btn active" data-target="html-editor">HTML</button>
                     <button type="button" class="toggle-btn active" data-target="css-editor">CSS</button>
+                    <button type="button" class="toggle-btn active" data-target="js-editor">JS</button>
                 </div>
             </div>
 
@@ -106,22 +108,26 @@
                         <input type="text" id="ruleName" required placeholder="e.g. Dark Mode">
                     </div>
                     <div class="form-group flex-1" id="ruleTypeGroup">
-                        <label>Type</label>
+                        <label>Type of Run</label>
                         <select id="ruleType">
                             <option value="Auto">Auto Run</option>
-                            <option value="Context">On Click (Menu)</option>
+                            <option value="Context">From Context Menu</option>
                         </select>
                     </div>
                 </div>
 
                 <div id="injectionEditors" class="editors-container">
-                    <div class="editor-pane" id="js-editor">
-                        <div class="pane-label"><i class="fab fa-js"></i> JavaScript</div>
-                        <textarea id="jsCode" class="code-area" placeholder="console.log('Hello');"></textarea>
-                    </div>
+                    <div class="editor-pane" id="html-editor">
+                        <div class="pane-label"><i class="fab fa-html5"></i> HTML</div>
+                        <textarea id="htmlCode" class="code-area" placeholder="<!-- HTML to inject -->"></textarea>
+                    </div>                     
                     <div class="editor-pane" id="css-editor">
                         <div class="pane-label"><i class="fab fa-css3"></i> CSS</div>
                         <textarea id="cssCode" class="code-area" placeholder="body { background: #000; }"></textarea>
+                    </div>                    
+                    <div class="editor-pane" id="js-editor">
+                        <div class="pane-label"><i class="fab fa-js"></i> JavaScript</div>
+                        <textarea id="jsCode" class="code-area" placeholder="console.log('Hello');"></textarea>
                     </div>
                 </div>
 
